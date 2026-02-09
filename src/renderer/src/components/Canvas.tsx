@@ -8,7 +8,9 @@ interface CanvasProps {
   tool: Tool
   color: string
   brushSize: number
+  pressureEnabled: boolean
   onDraw: () => void
+  interactive?: boolean
 }
 
 export interface CanvasHandle {
@@ -21,7 +23,7 @@ export interface CanvasHandle {
 }
 
 const Canvas = forwardRef<CanvasHandle, CanvasProps>(
-  ({ width, height, tool, color, brushSize, onDraw }, ref) => {
+  ({ width, height, tool, color, brushSize, pressureEnabled, onDraw, interactive = true }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const isDrawing = useRef(false)
     const lastPos = useRef<{ x: number; y: number } | null>(null)
@@ -89,7 +91,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           return
         }
 
-        const tolerance = 10
+        const tolerance = 32
         const matchTarget = (idx: number) => {
           return (
             Math.abs(data[idx] - targetR) <= tolerance &&
@@ -162,6 +164,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     const handlePointerDown = useCallback(
       (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (e.button !== 0) return
+        if (!interactive) return
         const canvas = canvasRef.current
         if (canvas) {
           canvas.setPointerCapture(e.pointerId)
@@ -183,8 +186,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
 
-        // Pressure-sensitive line width for pen tool
-        const pressure = e.pressure > 0 ? e.pressure : 0.5
+        const pressure = pressureEnabled && e.pressure > 0 ? e.pressure : 1
         ctx.lineWidth = tool === 'pen' ? brushSize * pressure : brushSize
 
         if (tool === 'eraser') {
@@ -195,7 +197,6 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ctx.strokeStyle = color
         }
 
-        // Draw a dot for single click
         const dotSize = tool === 'pen' ? (brushSize * pressure) / 2 : brushSize / 2
         ctx.beginPath()
         ctx.arc(pos.x, pos.y, dotSize, 0, Math.PI * 2)
@@ -207,7 +208,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         ctx.fill()
         ctx.globalCompositeOperation = prevComposite
       },
-      [tool, color, brushSize, getCanvasPos, getCtx, floodFill]
+      [tool, color, brushSize, pressureEnabled, getCanvasPos, getCtx, floodFill, interactive]
     )
 
     const handlePointerMove = useCallback(
@@ -216,15 +217,14 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const ctx = getCtx()
         if (!ctx) return
 
-        // Update line width based on pressure for pen tool
-        const pressure = e.pressure > 0 ? e.pressure : 0.5
+        const pressure = pressureEnabled && e.pressure > 0 ? e.pressure : 1
         ctx.lineWidth = tool === 'pen' ? brushSize * pressure : brushSize
 
         const pos = getCanvasPos(e)
         drawLine(ctx, lastPos.current.x, lastPos.current.y, pos.x, pos.y)
         lastPos.current = pos
       },
-      [getCtx, getCanvasPos, drawLine, tool, brushSize]
+      [getCtx, getCanvasPos, drawLine, tool, brushSize, pressureEnabled]
     )
 
     const handlePointerUp = useCallback(() => {
@@ -306,8 +306,9 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       [getCtx, width, height, saveState, onDraw]
     )
 
-    const cursorStyle =
-      tool === 'fill'
+    const cursorStyle = !interactive
+      ? 'inherit'
+      : tool === 'fill'
         ? 'crosshair'
         : tool === 'eraser'
           ? `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='${brushSize}' height='${brushSize}'><circle cx='${brushSize / 2}' cy='${brushSize / 2}' r='${brushSize / 2 - 1}' fill='none' stroke='%23888' stroke-width='1'/></svg>") ${brushSize / 2} ${brushSize / 2}, auto`

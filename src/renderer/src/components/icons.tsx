@@ -84,6 +84,15 @@ export const FolderOpenIcon = () => (
   </svg>
 )
 
+export const PressureIcon = () => (
+  <svg {...svgProps}>
+    <path d="M12 22c-4.97 0-9-2.69-9-6v-1c0-3.31 4.03-6 9-6s9 2.69 9 6v1c0 3.31-4.03 6-9 6Z" />
+    <path d="M12 2v7" />
+    <path d="M12 2 9 5" />
+    <path d="m12 2 3 3" />
+  </svg>
+)
+
 export const FilePlusIcon = () => (
   <svg {...svgProps}>
     <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />

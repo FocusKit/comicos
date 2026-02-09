@@ -14,11 +14,27 @@ const App: React.FC = () => {
   const [tool, setTool] = useState<Tool>('pen')
   const [color, setColor] = useState('#000000')
   const [brushSize, setBrushSize] = useState(3)
+  const [pressureEnabled, setPressureEnabled] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme)
   const [zoom, setZoom] = useState(1)
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number } | null>(null)
   const canvasRef = useRef<CanvasHandle>(null)
   const [, setDrawCount] = useState(0)
+
+  // Pan & zoom-drag state
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const [ctrlHeld, setCtrlHeld] = useState(false)
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const panDragRef = useRef<{
+    startX: number; startY: number; initPanX: number; initPanY: number
+  } | null>(null)
+  const zoomDragRef = useRef<{
+    startX: number; initZoom: number
+    anchorX: number; anchorY: number
+    initPanX: number; initPanY: number
+  } | null>(null)
+  const canvasAreaRef = useRef<HTMLDivElement>(null)
 
   // Apply theme
   useEffect(() => {
@@ -36,6 +52,10 @@ const App: React.FC = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }, [])
 
+  const togglePressure = useCallback(() => {
+    setPressureEnabled((prev) => !prev)
+  }, [])
+
   const handleDraw = useCallback(() => {
     setDrawCount((c) => c + 1)
   }, [])
@@ -46,6 +66,8 @@ const App: React.FC = () => {
 
   const handleNew = useCallback(() => {
     setCanvasSize(null)
+    setPanOffset({ x: 0, y: 0 })
+    setZoom(1)
   }, [])
 
   const handleCanvasSizeConfirm = useCallback((width: number, height: number) => {
@@ -63,6 +85,128 @@ const App: React.FC = () => {
     if (result.success && result.dataUrl) {
       canvasRef.current?.loadImage(result.dataUrl)
     }
+  }, [])
+
+  // Helper: compute cursor position relative to canvas-area center
+  const getCursorRelativeToCenter = useCallback((clientX: number, clientY: number) => {
+    const area = canvasAreaRef.current
+    if (!area) return { x: 0, y: 0 }
+    const rect = area.getBoundingClientRect()
+    return {
+      x: clientX - rect.left - rect.width / 2,
+      y: clientY - rect.top - rect.height / 2
+    }
+  }, [])
+
+  // Modifier key tracking (Space for pan, Ctrl+Space for zoom-drag)
+  useEffect(() => {
+    if (!canvasSize) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setSpaceHeld(true)
+      } else if (e.key === 'Control' || e.key === 'Meta') {
+        setCtrlHeld(true)
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setSpaceHeld(false)
+      } else if (e.key === 'Control' || e.key === 'Meta') {
+        setCtrlHeld(false)
+      }
+    }
+
+    const handleBlur = () => {
+      setSpaceHeld(false)
+      setCtrlHeld(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleBlur)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [canvasSize])
+
+  // Clear drag refs when modifier released
+  useEffect(() => {
+    if (!spaceHeld) {
+      panDragRef.current = null
+      zoomDragRef.current = null
+      setIsDragging(false)
+    }
+  }, [spaceHeld])
+
+  useEffect(() => {
+    if (!ctrlHeld) zoomDragRef.current = null
+  }, [ctrlHeld])
+
+  // Pointer handlers for pan/zoom on canvas-area
+  const handleAreaPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      if (spaceHeld && (e.ctrlKey || e.metaKey)) {
+        ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+        const cursor = getCursorRelativeToCenter(e.clientX, e.clientY)
+        zoomDragRef.current = {
+          startX: e.clientX,
+          initZoom: zoom,
+          anchorX: cursor.x - panOffset.x,
+          anchorY: cursor.y - panOffset.y,
+          initPanX: panOffset.x,
+          initPanY: panOffset.y
+        }
+        setIsDragging(true)
+      } else if (spaceHeld) {
+        ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+        panDragRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          initPanX: panOffset.x,
+          initPanY: panOffset.y
+        }
+        setIsDragging(true)
+      }
+    },
+    [spaceHeld, panOffset, zoom, getCursorRelativeToCenter]
+  )
+
+  const handleAreaPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (panDragRef.current) {
+        const dx = e.clientX - panDragRef.current.startX
+        const dy = e.clientY - panDragRef.current.startY
+        setPanOffset({
+          x: panDragRef.current.initPanX + dx,
+          y: panDragRef.current.initPanY + dy
+        })
+      } else if (zoomDragRef.current) {
+        const dx = e.clientX - zoomDragRef.current.startX
+        const newZoom = Math.min(3, Math.max(0.25,
+          zoomDragRef.current.initZoom + dx * 0.005
+        ))
+        const ratio = 1 - newZoom / zoomDragRef.current.initZoom
+        setPanOffset({
+          x: zoomDragRef.current.initPanX + zoomDragRef.current.anchorX * ratio,
+          y: zoomDragRef.current.initPanY + zoomDragRef.current.anchorY * ratio
+        })
+        setZoom(newZoom)
+      }
+    },
+    []
+  )
+
+  const handleAreaPointerUp = useCallback(() => {
+    panDragRef.current = null
+    zoomDragRef.current = null
+    setIsDragging(false)
   }, [])
 
   // Keyboard shortcuts
@@ -140,22 +284,35 @@ const App: React.FC = () => {
           break
         case 'zoom-reset':
           setZoom(1)
+          setPanOffset({ x: 0, y: 0 })
           break
       }
     })
     return cleanup
   }, [handleNew, handleOpen, handleSave, handleUndo, handleRedo])
 
-  // Zoom with Ctrl+Wheel
+  // Zoom with Ctrl+Wheel — anchored to cursor position
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault()
-        setZoom((z) => {
-          const delta = e.deltaY > 0 ? -0.05 : 0.05
-          return Math.min(3, Math.max(0.25, z + delta))
-        })
-      }
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+
+      const area = canvasAreaRef.current
+      if (!area) return
+      const rect = area.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left - rect.width / 2
+      const cursorY = e.clientY - rect.top - rect.height / 2
+
+      setZoom((prevZoom) => {
+        const delta = e.deltaY > 0 ? -0.05 : 0.05
+        const newZoom = Math.min(3, Math.max(0.25, prevZoom + delta))
+        const ratio = 1 - newZoom / prevZoom
+        setPanOffset((prevPan) => ({
+          x: prevPan.x + (cursorX - prevPan.x) * ratio,
+          y: prevPan.y + (cursorY - prevPan.y) * ratio
+        }))
+        return newZoom
+      })
     }
 
     window.addEventListener('wheel', handleWheel, { passive: false })
@@ -169,6 +326,12 @@ const App: React.FC = () => {
       </div>
     )
   }
+
+  const areaCursor = spaceHeld && ctrlHeld
+    ? 'zoom-in'
+    : spaceHeld
+      ? (isDragging ? 'grabbing' : 'grab')
+      : undefined
 
   return (
     <div className="app">
@@ -184,11 +347,25 @@ const App: React.FC = () => {
         onClear={handleClear}
         onSave={handleSave}
         onOpen={handleOpen}
+        pressureEnabled={pressureEnabled}
+        togglePressure={togglePressure}
         theme={theme}
         toggleTheme={toggleTheme}
       />
-      <div className="canvas-area">
-        <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+      <div
+        ref={canvasAreaRef}
+        className="canvas-area"
+        style={areaCursor ? { cursor: areaCursor } : undefined}
+        onPointerDown={handleAreaPointerDown}
+        onPointerMove={handleAreaPointerMove}
+        onPointerUp={handleAreaPointerUp}
+      >
+        <div
+          style={{
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+            transformOrigin: 'center center'
+          }}
+        >
           <Canvas
             ref={canvasRef}
             width={canvasSize.width}
@@ -196,7 +373,9 @@ const App: React.FC = () => {
             tool={tool}
             color={color}
             brushSize={brushSize}
+            pressureEnabled={pressureEnabled}
             onDraw={handleDraw}
+            interactive={!spaceHeld}
           />
         </div>
       </div>

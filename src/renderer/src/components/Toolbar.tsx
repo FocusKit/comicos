@@ -10,7 +10,8 @@ import {
   MoonIcon,
   SaveIcon,
   FolderOpenIcon,
-  FilePlusIcon
+  FilePlusIcon,
+  PressureIcon
 } from './icons'
 
 interface ToolbarProps {
@@ -25,6 +26,8 @@ interface ToolbarProps {
   onClear: () => void
   onSave: () => void
   onOpen: () => void
+  pressureEnabled: boolean
+  togglePressure: () => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
 }
@@ -41,6 +44,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onClear,
   onSave,
   onOpen,
+  pressureEnabled,
+  togglePressure,
   theme,
   toggleTheme
 }) => {
@@ -97,6 +102,13 @@ const Toolbar: React.FC<ToolbarProps> = ({
           title="색 채우기"
         >
           <FillIcon />
+        </button>
+        <button
+          className={`toolbar-btn ${pressureEnabled ? 'active' : ''}`}
+          onClick={togglePressure}
+          title="필압"
+        >
+          <PressureIcon />
         </button>
       </div>
 
