@@ -18,6 +18,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme)
   const [zoom, setZoom] = useState(1)
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number } | null>(null)
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const canvasRef = useRef<CanvasHandle>(null)
   const [, setDrawCount] = useState(0)
 
@@ -48,6 +49,12 @@ const App: React.FC = () => {
     document.documentElement.setAttribute('data-platform', platform)
   }, [])
 
+  // Window title
+  useEffect(() => {
+    const name = currentFilePath?.split(/[/\\]/).pop() ?? '제목 없음'
+    document.title = `${name} - Comicos`
+  }, [currentFilePath])
+
   const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }, [])
@@ -66,6 +73,7 @@ const App: React.FC = () => {
 
   const handleNew = useCallback(() => {
     setCanvasSize(null)
+    setCurrentFilePath(null)
     setPanOffset({ x: 0, y: 0 })
     setZoom(1)
   }, [])
@@ -74,16 +82,68 @@ const App: React.FC = () => {
     setCanvasSize({ width, height })
   }, [])
 
+  // Build .cmc project JSON from current state
+  const buildProjectData = useCallback(() => {
+    if (!canvasRef.current || !canvasSize) return null
+    const project = {
+      version: 1,
+      canvasWidth: canvasSize.width,
+      canvasHeight: canvasSize.height,
+      tool,
+      brushSize,
+      pressureEnabled,
+      color,
+      imageData: canvasRef.current.toDataURL()
+    }
+    return JSON.stringify(project, null, 2)
+  }, [canvasSize, tool, brushSize, pressureEnabled, color])
+
   const handleSave = useCallback(async () => {
+    const data = buildProjectData()
+    if (!data) return
+    const result = await window.api.saveProject(data, currentFilePath ?? undefined)
+    if (result.success && result.filePath) {
+      setCurrentFilePath(result.filePath)
+    }
+  }, [buildProjectData, currentFilePath])
+
+  const handleSaveAs = useCallback(async () => {
+    const data = buildProjectData()
+    if (!data) return
+    const result = await window.api.saveProjectAs(data)
+    if (result.success && result.filePath) {
+      setCurrentFilePath(result.filePath)
+    }
+  }, [buildProjectData])
+
+  const handleExport = useCallback(async () => {
     if (!canvasRef.current) return
     const dataUrl = canvasRef.current.toDataURL()
-    await window.api.saveImage(dataUrl)
+    await window.api.exportImage(dataUrl)
   }, [])
 
   const handleOpen = useCallback(async () => {
-    const result = await window.api.openImage()
-    if (result.success && result.dataUrl) {
-      canvasRef.current?.loadImage(result.dataUrl)
+    const result = await window.api.openProject()
+    if (result.success && result.data) {
+      try {
+        const project = JSON.parse(result.data)
+        setCanvasSize({ width: project.canvasWidth, height: project.canvasHeight })
+        setTool(project.tool ?? 'pen')
+        setBrushSize(project.brushSize ?? 3)
+        setPressureEnabled(project.pressureEnabled ?? true)
+        setColor(project.color ?? '#000000')
+        setCurrentFilePath(result.filePath)
+        setPanOffset({ x: 0, y: 0 })
+        setZoom(1)
+        // Load image after canvas has resized
+        setTimeout(() => {
+          if (project.imageData) {
+            canvasRef.current?.loadImage(project.imageData)
+          }
+        }, 50)
+      } catch {
+        // Invalid project file
+      }
     }
   }, [])
 
@@ -223,9 +283,15 @@ const App: React.FC = () => {
       } else if (ctrl && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault()
         handleRedo()
+      } else if (ctrl && e.shiftKey && e.key === 'S') {
+        e.preventDefault()
+        handleSaveAs()
       } else if (ctrl && e.key === 's' && !e.shiftKey) {
         e.preventDefault()
         handleSave()
+      } else if (ctrl && e.key === 'e') {
+        e.preventDefault()
+        handleExport()
       } else if (ctrl && e.key === 'o') {
         e.preventDefault()
         handleOpen()
@@ -253,7 +319,7 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleUndo, handleRedo, handleSave, handleOpen, handleNew, canvasSize])
+  }, [handleUndo, handleRedo, handleSave, handleSaveAs, handleExport, handleOpen, handleNew, canvasSize])
 
   // Menu actions from main process
   useEffect(() => {
@@ -267,8 +333,13 @@ const App: React.FC = () => {
           handleOpen()
           break
         case 'save':
-        case 'save-as':
           handleSave()
+          break
+        case 'save-as':
+          handleSaveAs()
+          break
+        case 'export':
+          handleExport()
           break
         case 'undo':
           handleUndo()
@@ -289,7 +360,7 @@ const App: React.FC = () => {
       }
     })
     return cleanup
-  }, [handleNew, handleOpen, handleSave, handleUndo, handleRedo])
+  }, [handleNew, handleOpen, handleSave, handleSaveAs, handleExport, handleUndo, handleRedo])
 
   // Zoom with Ctrl+Wheel — anchored to cursor position
   useEffect(() => {

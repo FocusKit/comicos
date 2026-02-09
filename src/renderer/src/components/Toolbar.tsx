@@ -58,7 +58,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <button className="toolbar-btn" onClick={onClear} title="새 캔버스">
           <FilePlusIcon />
         </button>
-        <button className="toolbar-btn" onClick={onOpen} title="이미지 열기">
+        <button className="toolbar-btn" onClick={onOpen} title="열기">
           <FolderOpenIcon />
         </button>
         <button className="toolbar-btn" onClick={onSave} title="저장">

@@ -35,7 +35,7 @@ export function createMenu(): void {
         },
         { type: 'separator' },
         {
-          label: '이미지 열기',
+          label: '열기',
           accelerator: 'CmdOrCtrl+O',
           click: () => sendToRenderer('menu:action', 'open')
         },
@@ -49,6 +49,12 @@ export function createMenu(): void {
           label: '다른 이름으로 저장',
           accelerator: 'CmdOrCtrl+Shift+S',
           click: () => sendToRenderer('menu:action', 'save-as')
+        },
+        { type: 'separator' },
+        {
+          label: '내보내기',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => sendToRenderer('menu:action', 'export')
         },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }

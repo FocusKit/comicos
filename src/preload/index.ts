@@ -1,8 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
-  saveImage: (dataUrl: string) => ipcRenderer.invoke('file:save-image', dataUrl),
-  openImage: () => ipcRenderer.invoke('file:open-image'),
+  saveProject: (data: string, filePath?: string) =>
+    ipcRenderer.invoke('file:save-project', data, filePath),
+  saveProjectAs: (data: string) => ipcRenderer.invoke('file:save-project-as', data),
+  openProject: () => ipcRenderer.invoke('file:open-project'),
+  exportImage: (dataUrl: string) => ipcRenderer.invoke('file:export-image', dataUrl),
   getZoomFactor: () => ipcRenderer.invoke('zoom:get'),
   setZoomFactor: (factor: number) => ipcRenderer.invoke('zoom:set', factor),
   onMenuAction: (callback: (action: string) => void) => {
