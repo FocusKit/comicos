@@ -123,37 +123,41 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1])
         }
 
-        // Edge expansion: blend fill color into anti-aliased fringe pixels
-        for (let y = 0; y < height; y++) {
-          for (let x = 0; x < width; x++) {
-            const idx = y * width + x
-            if (visited[idx]) continue
+        // Edge expansion: blend fill color into anti-aliased fringe pixels (multi-pass)
+        const expanded = new Uint8Array(visited)
+        for (let pass = 0; pass < 3; pass++) {
+          const newlyExpanded: number[] = []
+          for (let py = 0; py < height; py++) {
+            for (let px = 0; px < width; px++) {
+              const idx = py * width + px
+              if (expanded[idx]) continue
 
-            // Check if adjacent to a filled pixel
-            const hasFilledNeighbor =
-              (x > 0 && visited[idx - 1]) ||
-              (x < width - 1 && visited[idx + 1]) ||
-              (y > 0 && visited[idx - width]) ||
-              (y < height - 1 && visited[idx + width])
-            if (!hasFilledNeighbor) continue
+              const hasExpandedNeighbor =
+                (px > 0 && expanded[idx - 1]) ||
+                (px < width - 1 && expanded[idx + 1]) ||
+                (py > 0 && expanded[idx - width]) ||
+                (py < height - 1 && expanded[idx + width])
+              if (!hasExpandedNeighbor) continue
 
-            // Compute how similar this pixel is to the target (background) color
-            const di = idx * 4
-            const maxDiff = Math.max(
-              Math.abs(data[di] - targetR),
-              Math.abs(data[di + 1] - targetG),
-              Math.abs(data[di + 2] - targetB)
-            )
-            // similarity: 1 = identical to background, 0 = fully stroke
-            const similarity = Math.max(0, 1 - maxDiff / 255)
-            if (similarity <= 0) continue
+              const di = idx * 4
+              const maxDiff = Math.max(
+                Math.abs(data[di] - targetR),
+                Math.abs(data[di + 1] - targetG),
+                Math.abs(data[di + 2] - targetB)
+              )
+              // bgFraction: 1 = fully background, 0 = fully stroke
+              const bgFraction = Math.max(0, 1 - maxDiff / 255)
+              if (bgFraction <= 0) continue
 
-            // Replace the background portion with fill color
-            data[di] = Math.round(data[di] * (1 - similarity) + fillRgb[0] * similarity)
-            data[di + 1] = Math.round(data[di + 1] * (1 - similarity) + fillRgb[1] * similarity)
-            data[di + 2] = Math.round(data[di + 2] * (1 - similarity) + fillRgb[2] * similarity)
-            data[di + 3] = 255
+              // Replace the background portion with fill color
+              data[di] = Math.round(Math.min(255, Math.max(0, data[di] + bgFraction * (fillRgb[0] - targetR))))
+              data[di + 1] = Math.round(Math.min(255, Math.max(0, data[di + 1] + bgFraction * (fillRgb[1] - targetG))))
+              data[di + 2] = Math.round(Math.min(255, Math.max(0, data[di + 2] + bgFraction * (fillRgb[2] - targetB))))
+              data[di + 3] = 255
+              newlyExpanded.push(idx)
+            }
           }
+          for (const idx of newlyExpanded) expanded[idx] = 1
         }
 
         ctx.putImageData(imageData, 0, 0)
