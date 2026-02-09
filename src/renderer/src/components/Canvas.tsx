@@ -129,7 +129,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     )
 
     const getCanvasPos = useCallback(
-      (e: React.MouseEvent<HTMLCanvasElement>) => {
+      (e: React.PointerEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current
         if (!canvas) return { x: 0, y: 0 }
         const rect = canvas.getBoundingClientRect()
@@ -159,9 +159,14 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       []
     )
 
-    const handleMouseDown = useCallback(
-      (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const handlePointerDown = useCallback(
+      (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (e.button !== 0) return
+        const canvas = canvasRef.current
+        if (canvas) {
+          canvas.setPointerCapture(e.pointerId)
+        }
+
         const pos = getCanvasPos(e)
 
         if (tool === 'fill') {
@@ -177,7 +182,10 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
 
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
-        ctx.lineWidth = brushSize
+
+        // Pressure-sensitive line width for pen tool
+        const pressure = e.pressure > 0 ? e.pressure : 0.5
+        ctx.lineWidth = tool === 'pen' ? brushSize * pressure : brushSize
 
         if (tool === 'eraser') {
           ctx.globalCompositeOperation = 'destination-out'
@@ -188,8 +196,9 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         }
 
         // Draw a dot for single click
+        const dotSize = tool === 'pen' ? (brushSize * pressure) / 2 : brushSize / 2
         ctx.beginPath()
-        ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2)
+        ctx.arc(pos.x, pos.y, dotSize, 0, Math.PI * 2)
         ctx.fillStyle = tool === 'eraser' ? 'rgba(0,0,0,1)' : color
         const prevComposite = ctx.globalCompositeOperation
         if (tool === 'eraser') {
@@ -201,20 +210,24 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       [tool, color, brushSize, getCanvasPos, getCtx, floodFill]
     )
 
-    const handleMouseMove = useCallback(
-      (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const handlePointerMove = useCallback(
+      (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!isDrawing.current || !lastPos.current) return
         const ctx = getCtx()
         if (!ctx) return
+
+        // Update line width based on pressure for pen tool
+        const pressure = e.pressure > 0 ? e.pressure : 0.5
+        ctx.lineWidth = tool === 'pen' ? brushSize * pressure : brushSize
 
         const pos = getCanvasPos(e)
         drawLine(ctx, lastPos.current.x, lastPos.current.y, pos.x, pos.y)
         lastPos.current = pos
       },
-      [getCtx, getCanvasPos, drawLine]
+      [getCtx, getCanvasPos, drawLine, tool, brushSize]
     )
 
-    const handleMouseUp = useCallback(() => {
+    const handlePointerUp = useCallback(() => {
       if (isDrawing.current) {
         isDrawing.current = false
         lastPos.current = null
@@ -227,7 +240,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       }
     }, [getCtx, saveState, onDraw])
 
-    // Global mouse up listener
+    // Global pointer up listener
     useEffect(() => {
       const handleGlobalUp = () => {
         if (isDrawing.current) {
@@ -241,8 +254,8 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           onDraw()
         }
       }
-      window.addEventListener('mouseup', handleGlobalUp)
-      return () => window.removeEventListener('mouseup', handleGlobalUp)
+      window.addEventListener('pointerup', handleGlobalUp)
+      return () => window.removeEventListener('pointerup', handleGlobalUp)
     }, [getCtx, saveState, onDraw])
 
     useImperativeHandle(
@@ -306,10 +319,10 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ref={canvasRef}
           width={width}
           height={height}
-          style={{ cursor: cursorStyle }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          style={{ cursor: cursorStyle, touchAction: 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           onContextMenu={(e) => e.preventDefault()}
         />
       </div>

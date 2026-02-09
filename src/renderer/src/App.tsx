@@ -2,9 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Toolbar from './components/Toolbar'
 import Canvas, { type Tool, type CanvasHandle } from './components/Canvas'
 import StatusBar from './components/StatusBar'
-
-const CANVAS_WIDTH = 1200
-const CANVAS_HEIGHT = 800
+import CanvasSizeModal from './components/CanvasSizeModal'
 
 function getInitialTheme(): 'light' | 'dark' {
   const saved = localStorage.getItem('comicos-theme')
@@ -18,6 +16,7 @@ const App: React.FC = () => {
   const [brushSize, setBrushSize] = useState(3)
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme)
   const [zoom, setZoom] = useState(1)
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number } | null>(null)
   const canvasRef = useRef<CanvasHandle>(null)
   const [, setDrawCount] = useState(0)
 
@@ -45,6 +44,14 @@ const App: React.FC = () => {
   const handleRedo = useCallback(() => canvasRef.current?.redo(), [])
   const handleClear = useCallback(() => canvasRef.current?.clear(), [])
 
+  const handleNew = useCallback(() => {
+    setCanvasSize(null)
+  }, [])
+
+  const handleCanvasSizeConfirm = useCallback((width: number, height: number) => {
+    setCanvasSize({ width, height })
+  }, [])
+
   const handleSave = useCallback(async () => {
     if (!canvasRef.current) return
     const dataUrl = canvasRef.current.toDataURL()
@@ -63,7 +70,10 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey
 
-      if (ctrl && e.key === 'z' && !e.shiftKey) {
+      if (ctrl && e.key === 'n') {
+        e.preventDefault()
+        handleNew()
+      } else if (ctrl && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
         handleUndo()
       } else if (ctrl && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
@@ -75,7 +85,7 @@ const App: React.FC = () => {
       } else if (ctrl && e.key === 'o') {
         e.preventDefault()
         handleOpen()
-      } else if (!ctrl) {
+      } else if (!ctrl && canvasSize) {
         switch (e.key) {
           case 'b':
           case 'p':
@@ -99,7 +109,7 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleUndo, handleRedo, handleSave, handleOpen])
+  }, [handleUndo, handleRedo, handleSave, handleOpen, handleNew, canvasSize])
 
   // Menu actions from main process
   useEffect(() => {
@@ -107,7 +117,7 @@ const App: React.FC = () => {
     const cleanup = window.api.onMenuAction((action: string) => {
       switch (action) {
         case 'new':
-          handleClear()
+          handleNew()
           break
         case 'open':
           handleOpen()
@@ -134,7 +144,7 @@ const App: React.FC = () => {
       }
     })
     return cleanup
-  }, [handleClear, handleOpen, handleSave, handleUndo, handleRedo])
+  }, [handleNew, handleOpen, handleSave, handleUndo, handleRedo])
 
   // Zoom with Ctrl+Wheel
   useEffect(() => {
@@ -151,6 +161,14 @@ const App: React.FC = () => {
     window.addEventListener('wheel', handleWheel, { passive: false })
     return () => window.removeEventListener('wheel', handleWheel)
   }, [])
+
+  if (!canvasSize) {
+    return (
+      <div className="app">
+        <CanvasSizeModal onConfirm={handleCanvasSizeConfirm} />
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -173,8 +191,8 @@ const App: React.FC = () => {
         <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
           <Canvas
             ref={canvasRef}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            width={canvasSize.width}
+            height={canvasSize.height}
             tool={tool}
             color={color}
             brushSize={brushSize}
@@ -183,8 +201,8 @@ const App: React.FC = () => {
         </div>
       </div>
       <StatusBar
-        canvasWidth={CANVAS_WIDTH}
-        canvasHeight={CANVAS_HEIGHT}
+        canvasWidth={canvasSize.width}
+        canvasHeight={canvasSize.height}
         tool={tool}
         zoom={zoom}
       />
