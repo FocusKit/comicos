@@ -13,14 +13,13 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: process.platform !== 'darwin',
+    icon: join(__dirname, '../../resources/app.png'),
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: 16, y: 12 }
         }
-      : {
-          icon: join(__dirname, '../../resources/app.ico')
-        }),
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

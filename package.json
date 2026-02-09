@@ -26,9 +26,16 @@
   "build": {
     "appId": "com.comicos.app",
     "productName": "Comicos",
+    "icon": "resources/app.png",
     "win": {
       "target": "nsis",
       "icon": "resources/app.ico"
+    },
+    "mac": {
+      "icon": "resources/app.png"
+    },
+    "linux": {
+      "icon": "resources/app.png"
     },
     "nsis": {
       "allowToChangeInstallationDirectory": true,
