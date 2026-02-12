@@ -32,6 +32,7 @@ target_link_libraries(comicos PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::QuickDialogs2
     Qt6::Svg
 )
 

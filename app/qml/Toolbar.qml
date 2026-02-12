@@ -8,6 +8,8 @@ Rectangle {
     id: toolbar
 
     signal newDocumentRequested()
+    signal openRequested()
+    signal saveRequested()
 
     height: Theme.toolbarHeight
     color: Theme.bgSecondary
@@ -38,7 +40,16 @@ Rectangle {
                 tooltip: "새 문서"
                 onClicked: toolbar.newDocumentRequested()
             }
-            // Extension point: Open, Save buttons
+            IconButton {
+                iconText: "📂"
+                tooltip: "열기 (Ctrl+O)"
+                onClicked: toolbar.openRequested()
+            }
+            IconButton {
+                iconText: "💾"
+                tooltip: "저장 (Ctrl+S)"
+                onClicked: toolbar.saveRequested()
+            }
         }
 
         // Separator

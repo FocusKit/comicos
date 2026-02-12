@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import Comicos 1.0
 import "controls"
 
@@ -22,6 +23,14 @@ ApplicationWindow {
     }
 
     color: Theme.bgPrimary
+
+    onClosing: (close) => {
+        if (AppController.isDirty) {
+            close.accepted = false
+            root._pendingAction = "quit"
+            unsavedModal.visible = true
+        }
+    }
 
     // Bind theme
     Component.onCompleted: {
@@ -55,9 +64,73 @@ ApplicationWindow {
         onActivated: AppController.brushSize = Math.min(500, AppController.brushSize + 1)
     }
 
+    // --- File Shortcuts ---
+    Shortcut {
+        sequence: StandardKey.Save
+        onActivated: root.handleSave()
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+S"
+        onActivated: saveDialog.open()
+    }
+    Shortcut {
+        sequence: StandardKey.Open
+        onActivated: root.handleOpen()
+    }
+
+    // --- File Dialogs ---
+    property string _pendingAction: ""  // "new" or "open"
+
+    FileDialog {
+        id: saveDialog
+        title: "문서 저장"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Comicos 파일 (*.cmc)"]
+        defaultSuffix: "cmc"
+        onAccepted: {
+            let path = selectedFile.toString().replace("file:///", "")
+            if (AppController.saveDocumentTo(path)) {
+                root.executePendingAction()
+            }
+        }
+        onRejected: {
+            root._pendingAction = ""
+        }
+    }
+
+    FileDialog {
+        id: openDialog
+        title: "문서 열기"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Comicos 파일 (*.cmc)"]
+        onAccepted: {
+            let path = selectedFile.toString().replace("file:///", "")
+            AppController.openDocument(path)
+        }
+    }
+
+    // --- File Actions ---
+    function handleSave() {
+        if (AppController.filePath) {
+            AppController.saveDocument()
+        } else {
+            saveDialog.open()
+        }
+    }
+
+    function handleOpen() {
+        if (AppController.isDirty) {
+            root._pendingAction = "open"
+            unsavedModal.visible = true
+        } else {
+            openDialog.open()
+        }
+    }
+
     // --- New Document Flow ---
     function handleNewDocument() {
         if (AppController.isDirty) {
+            root._pendingAction = "new"
             unsavedModal.visible = true
         } else {
             AppController.newDocument(2480, 3508)
@@ -73,6 +146,8 @@ ApplicationWindow {
         Toolbar {
             Layout.fillWidth: true
             onNewDocumentRequested: root.handleNewDocument()
+            onOpenRequested: root.handleOpen()
+            onSaveRequested: root.handleSave()
         }
 
         // Main content area
@@ -117,8 +192,13 @@ ApplicationWindow {
                 label: "저장",
                 variant: "primary",
                 action: () => {
-                    // Extension point: save then create new document
                     unsavedModal.visible = false
+                    if (AppController.filePath) {
+                        AppController.saveDocument()
+                        root.executePendingAction()
+                    } else {
+                        saveDialog.open()
+                    }
                 }
             },
             {
@@ -126,7 +206,7 @@ ApplicationWindow {
                 variant: "danger",
                 action: () => {
                     unsavedModal.visible = false
-                    AppController.newDocument(2480, 3508)
+                    root.executePendingAction()
                 }
             },
             {
@@ -134,9 +214,25 @@ ApplicationWindow {
                 variant: "secondary",
                 action: () => {
                     unsavedModal.visible = false
+                    root._pendingAction = ""
                 }
             }
         ]
-        onClosed: visible = false
+        onClosed: {
+            visible = false
+            root._pendingAction = ""
+        }
+    }
+
+    function executePendingAction() {
+        let action = root._pendingAction
+        root._pendingAction = ""
+        if (action === "new") {
+            AppController.newDocument(2480, 3508)
+        } else if (action === "open") {
+            openDialog.open()
+        } else if (action === "quit") {
+            Qt.quit()
+        }
     }
 }

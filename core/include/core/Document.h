@@ -5,6 +5,7 @@
 #include "core/Types.h"
 #include <QSize>
 #include <QString>
+#include <memory>
 
 namespace comicos {
 
@@ -38,9 +39,8 @@ public:
     void setDirty(bool dirty) { m_dirty = dirty; }
 
     // --- Serialization ---
-    // Extension point: .cmc project format save/load
-    // bool save(const QString& path);
-    // static std::unique_ptr<Document> load(const QString& path);
+    bool save(const QString& path);
+    static std::unique_ptr<Document> load(const QString& path);
 
     // Extension point: export to PNG/PSD/etc.
     // QImage exportFlattened() const;

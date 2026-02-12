@@ -50,6 +50,10 @@ public:
     void setActiveLayerId(LayerId id) { m_activeLayerId = id; }
     Layer* activeLayer();
 
+    // --- Serialization support ---
+    LayerId peekNextId() const { return m_nextId; }
+    void setNextId(LayerId id) { m_nextId = id; }
+
     // Extension point: layer groups / folders
     // Layer* createGroup(const QString& name);
 

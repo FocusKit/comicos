@@ -91,6 +91,9 @@ public:
 
     // --- Actions (invocable from QML) ---
     Q_INVOKABLE void newDocument(int width, int height, int dpi = 300);
+    Q_INVOKABLE bool saveDocument();
+    Q_INVOKABLE bool saveDocumentTo(const QString& path);
+    Q_INVOKABLE bool openDocument(const QString& path);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
 

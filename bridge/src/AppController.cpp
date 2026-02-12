@@ -221,6 +221,52 @@ void AppController::newDocument(int width, int height, int dpi) {
     emit filePathChanged();
 }
 
+bool AppController::saveDocument() {
+    if (!m_document) return false;
+    if (m_document->filePath().isEmpty()) return false;
+    return saveDocumentTo(m_document->filePath());
+}
+
+bool AppController::saveDocumentTo(const QString& path) {
+    if (!m_document) return false;
+
+    // Cancel any in-progress stroke before saving
+    if (m_brushEngine.isActive()) {
+        m_brushEngine.cancelStroke();
+        m_strokeLayer = nullptr;
+    }
+
+    if (!m_document->save(path))
+        return false;
+
+    emit dirtyChanged();
+    emit filePathChanged();
+    return true;
+}
+
+bool AppController::openDocument(const QString& path) {
+    // Cancel any in-progress stroke before replacing document
+    if (m_brushEngine.isActive()) {
+        m_brushEngine.cancelStroke();
+        m_strokeLayer = nullptr;
+    }
+
+    auto doc = Document::load(path);
+    if (!doc) return false;
+
+    m_document = std::move(doc);
+    m_layerModel->setDocument(m_document.get());
+
+    if (m_canvasItem) {
+        m_canvasItem->setDocument(m_document.get());
+    }
+
+    emit historyChanged();
+    emit dirtyChanged();
+    emit filePathChanged();
+    return true;
+}
+
 void AppController::undo() {
     if (!m_document) return;
 

@@ -7,6 +7,7 @@ qt_add_library(comicos_core STATIC
     src/Stroke.cpp
     src/History.cpp
     src/Document.cpp
+    src/CmcFormat.cpp
 )
 
 target_include_directories(comicos_core PUBLIC
