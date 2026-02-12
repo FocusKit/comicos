@@ -1,0 +1,43 @@
+# Build
+build/
+cmake-build-*/
+out/
+.cache/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.swp
+*.swo
+*~
+.idea/
+CMakeLists.txt.user
+CMakeUserPresets.json
+
+# Qt
+*.qmlc
+*.jsc
+moc_*
+qrc_*
+ui_*
+
+# Compiled
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+*.app
+*.ipa
+
+# Shader compiled
+*.qsb
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
