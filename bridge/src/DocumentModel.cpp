@@ -69,6 +69,11 @@ bool DocumentModel::setData(const QModelIndex& index, const QVariant& value, int
     }
 
     emit dataChanged(index, index, {role});
+
+    if (role == OpacityRole || role == VisibleRole) {
+        emit layerVisualChanged();
+    }
+
     return true;
 }
 
@@ -107,6 +112,7 @@ void DocumentModel::removeLayer(int index) {
     m_document->layers().removeLayer(layer->id());
     endRemoveRows();
     emit activeLayerChanged();
+    emit layerVisualChanged();
 }
 
 void DocumentModel::duplicateLayer(int index) {
@@ -119,6 +125,8 @@ void DocumentModel::duplicateLayer(int index) {
     beginInsertRows({}, index, index);
     m_document->layers().duplicateLayer(layer->id());
     endInsertRows();
+    emit activeLayerChanged();
+    emit layerVisualChanged();
 }
 
 void DocumentModel::moveLayer(int from, int to) {
@@ -132,6 +140,8 @@ void DocumentModel::moveLayer(int from, int to) {
     beginMoveRows({}, from, from, {}, to > from ? to + 1 : to);
     m_document->layers().moveLayer(fromLayer, toLayer);
     endMoveRows();
+    emit activeLayerChanged();
+    emit layerVisualChanged();
 }
 
 void DocumentModel::setLayerName(int index, const QString& name) {
@@ -161,6 +171,22 @@ void DocumentModel::setActiveLayerIndex(int index) {
         m_document->layers().setActiveLayerId(layer->id());
         emit activeLayerChanged();
     }
+}
+
+qreal DocumentModel::activeLayerOpacity() const {
+    if (!m_document) return 1.0;
+    int idx = m_document->layers().indexOf(m_document->layers().activeLayerId());
+    if (idx < 0) return 1.0;
+    const Layer* layer = m_document->layers().layerAt(idx);
+    return layer ? layer->opacity() : 1.0;
+}
+
+void DocumentModel::setActiveLayerOpacity(qreal opacity) {
+    int index = activeLayerIndex();
+    if (index < 0) return;
+    setLayerOpacity(index, opacity);
+    emit activeLayerChanged();
+    emit layerVisualChanged();
 }
 
 int DocumentModel::canvasWidth() const {

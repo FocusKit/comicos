@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/DocumentModel.h"
 #include "core/Document.h"
 #include "core/History.h"
 #include "core/Types.h"
@@ -12,9 +13,10 @@ namespace comicos {
 
 /// Undoable command for a completed brush stroke.
 /// Stores before/after tile snapshots for the affected tiles.
+/// Uses LayerStack + LayerId instead of raw Layer* to survive layer deletion.
 class StrokeCommand : public HistoryCommand {
 public:
-    StrokeCommand(Layer* layer,
+    StrokeCommand(LayerStack* layers, LayerId layerId,
                   std::vector<TileCoord> affectedTiles,
                   std::unordered_map<TileCoord, std::unique_ptr<Tile>> before);
 
@@ -23,7 +25,8 @@ public:
     size_t memoryUsage() const override;
 
 private:
-    Layer* m_layer;
+    LayerStack* m_layers;
+    LayerId m_layerId;
     std::vector<TileCoord> m_coords;
     std::unordered_map<TileCoord, std::unique_ptr<Tile>> m_before;
     std::unordered_map<TileCoord, std::unique_ptr<Tile>> m_after;
@@ -46,6 +49,9 @@ class AppController : public QObject {
     // --- Theme ---
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
     Q_PROPERTY(bool isDarkTheme READ isDarkTheme NOTIFY themeChanged)
+
+    // --- Layer Model ---
+    Q_PROPERTY(DocumentModel* layerModel READ layerModel CONSTANT)
 
     // --- Document State ---
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
@@ -73,6 +79,9 @@ public:
     QString theme() const;
     void setTheme(const QString& theme);
     bool isDarkTheme() const;
+
+    // --- Layer Model ---
+    DocumentModel* layerModel() const;
 
     // --- Document ---
     bool canUndo() const;
@@ -107,6 +116,7 @@ signals:
 
 private:
     std::unique_ptr<Document> m_document;
+    DocumentModel* m_layerModel = nullptr;
     BrushEngine m_brushEngine;
     CanvasItem* m_canvasItem = nullptr;
 

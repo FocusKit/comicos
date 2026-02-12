@@ -14,6 +14,7 @@ class DocumentModel : public QAbstractListModel {
     QML_ELEMENT
 
     Q_PROPERTY(int activeLayerIndex READ activeLayerIndex WRITE setActiveLayerIndex NOTIFY activeLayerChanged)
+    Q_PROPERTY(qreal activeLayerOpacity READ activeLayerOpacity WRITE setActiveLayerOpacity NOTIFY activeLayerChanged)
     Q_PROPERTY(int canvasWidth READ canvasWidth NOTIFY canvasSizeChanged)
     Q_PROPERTY(int canvasHeight READ canvasHeight NOTIFY canvasSizeChanged)
 
@@ -51,11 +52,14 @@ public:
     // --- Properties ---
     int activeLayerIndex() const;
     void setActiveLayerIndex(int index);
+    qreal activeLayerOpacity() const;
+    void setActiveLayerOpacity(qreal opacity);
     int canvasWidth() const;
     int canvasHeight() const;
 
 signals:
     void activeLayerChanged();
+    void layerVisualChanged();
     void canvasSizeChanged();
 
 private:

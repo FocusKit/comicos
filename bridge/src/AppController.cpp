@@ -7,50 +7,58 @@ namespace comicos {
 // --- StrokeCommand ---
 
 StrokeCommand::StrokeCommand(
-    Layer* layer,
+    LayerStack* layers, LayerId layerId,
     std::vector<TileCoord> affectedTiles,
     std::unordered_map<TileCoord, std::unique_ptr<Tile>> before)
-    : m_layer(layer)
+    : m_layers(layers)
+    , m_layerId(layerId)
     , m_coords(std::move(affectedTiles))
     , m_before(std::move(before))
     , m_firstRedo(true)
 {
     // Capture "after" state — the stroke is already applied by BrushEngine
-    for (const auto& tc : m_coords) {
-        const Tile* tile = m_layer->tiles().tileAt(tc);
-        if (tile && !tile->isEmpty()) {
-            m_after[tc] = tile->clone();
+    Layer* layer = m_layers->layerById(m_layerId);
+    if (layer) {
+        for (const auto& tc : m_coords) {
+            const Tile* tile = layer->tiles().tileAt(tc);
+            if (tile && !tile->isEmpty()) {
+                m_after[tc] = tile->clone();
+            }
         }
     }
 }
 
 void StrokeCommand::undo() {
+    Layer* layer = m_layers->layerById(m_layerId);
+    if (!layer) return;  // Layer was deleted — nothing to undo
+
     for (const auto& tc : m_coords) {
         auto it = m_before.find(tc);
         if (it != m_before.end() && it->second) {
-            // Restore the "before" tile
-            Tile* tile = m_layer->tiles().getOrCreateTile(tc);
+            Tile* tile = layer->tiles().getOrCreateTile(tc);
             *tile = *(it->second);
         } else {
-            // Tile didn't exist before the stroke — remove it
-            m_layer->tiles().removeTile(tc);
+            layer->tiles().removeTile(tc);
         }
     }
 }
 
 void StrokeCommand::redo() {
     if (m_firstRedo) {
-        // First redo() is called by History::push() — stroke already applied
         m_firstRedo = false;
         return;
     }
+
+    Layer* layer = m_layers->layerById(m_layerId);
+    if (!layer) return;  // Layer was deleted — nothing to redo
+
     for (const auto& tc : m_coords) {
         auto it = m_after.find(tc);
         if (it != m_after.end() && it->second) {
-            Tile* tile = m_layer->tiles().getOrCreateTile(tc);
+            Tile* tile = layer->tiles().getOrCreateTile(tc);
             *tile = *(it->second);
         } else {
-            m_layer->tiles().removeTile(tc);
+            layer->tiles().removeTile(tc);
         }
     }
 }
@@ -71,6 +79,20 @@ size_t StrokeCommand::memoryUsage() const {
 
 AppController::AppController(QObject* parent) : QObject(parent) {
     m_document = std::make_unique<Document>();
+
+    // Create layer model and bind to document
+    m_layerModel = new DocumentModel(this);
+    m_layerModel->setDocument(m_document.get());
+
+    // When layer visuals change, repaint canvas
+    connect(m_layerModel, &DocumentModel::layerVisualChanged, this, [this]() {
+        if (m_canvasItem) {
+            m_canvasItem->invalidateCanvas();
+        }
+        m_document->setDirty(true);
+        emit canvasNeedsUpdate();
+        emit dirtyChanged();
+    });
 
     // Detect system theme
     auto* hints = QGuiApplication::styleHints();
@@ -152,6 +174,12 @@ bool AppController::isDarkTheme() const {
     return hints && hints->colorScheme() == Qt::ColorScheme::Dark;
 }
 
+// --- Layer Model ---
+
+DocumentModel* AppController::layerModel() const {
+    return m_layerModel;
+}
+
 // --- Document ---
 
 bool AppController::canUndo() const {
@@ -173,8 +201,16 @@ QString AppController::filePath() const {
 // --- Actions ---
 
 void AppController::newDocument(int width, int height, int dpi) {
+    // Cancel any in-progress stroke before replacing document
+    if (m_brushEngine.isActive()) {
+        m_brushEngine.cancelStroke();
+        m_strokeLayer = nullptr;
+    }
+
     m_document = std::make_unique<Document>(QSize(width, height));
     m_document->setDpi(dpi);
+
+    m_layerModel->setDocument(m_document.get());
 
     if (m_canvasItem) {
         m_canvasItem->setDocument(m_document.get());
@@ -187,6 +223,13 @@ void AppController::newDocument(int width, int height, int dpi) {
 
 void AppController::undo() {
     if (!m_document) return;
+
+    // Cancel any in-progress stroke before undo
+    if (m_brushEngine.isActive()) {
+        m_brushEngine.cancelStroke();
+        m_strokeLayer = nullptr;
+    }
+
     m_document->history().undo();
     emit historyChanged();
 
@@ -197,6 +240,13 @@ void AppController::undo() {
 
 void AppController::redo() {
     if (!m_document) return;
+
+    // Cancel any in-progress stroke before redo
+    if (m_brushEngine.isActive()) {
+        m_brushEngine.cancelStroke();
+        m_strokeLayer = nullptr;
+    }
+
     m_document->history().redo();
     emit historyChanged();
 
@@ -263,7 +313,8 @@ void AppController::onStrokeEnded() {
 
     if (m_strokeLayer && !affectedTiles.empty()) {
         auto cmd = std::make_unique<StrokeCommand>(
-            m_strokeLayer, affectedTiles, std::move(beforeSnapshots));
+            &m_document->layers(), m_strokeLayer->id(),
+            affectedTiles, std::move(beforeSnapshots));
         m_document->history().push(std::move(cmd));
     }
 
